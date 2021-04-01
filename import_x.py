@@ -7,7 +7,12 @@ import re
 import struct, binascii
 import time
 
+from typing import Union
+
 import bpy
+from bpy.types import Armature, EditBone
+from bpy_extras import node_shader_utils
+
 import mathutils as bmat
 from mathutils import Vector, Matrix
 
@@ -61,7 +66,8 @@ def load(operator, context, filepath, files,
          use_split_groups=True,
          use_groups_as_vgroups=False,
          use_image_search=True,
-         global_matrix=None,
+         lefthanded=True,
+         global_matrix: Matrix = None,
          ):
     if quickmode:
         parented = False
@@ -316,16 +322,16 @@ BINARY FORMAT
 
     # name unnamed tokens, watchout for x duplicate
     # for blender, referenced token in x should be named and unique..
-    def getName(l, tokens):
-        xnam = l.split(' ')[1].strip()
+    def getName(line: str, tokens) -> str:
+        xnam = line.split(' ')[1].strip()
 
         # if xnam[0] == '{' : xnam = ''
         if xnam and xnam[-1] == '{': xnam = xnam[:-1]
 
         name = xnam
-        if len(name) == 0: name = l.split(' ')[0].strip()
+        if len(name) == 0: name = line.split(' ')[0].strip()
 
-        namelookup[xnam] = bel.bpyname(name, tokens, 4)
+        namelookup[xnam] = bel.bpyname(name, tokens, suffix=4)
 
         return namelookup[xnam]
 
@@ -393,6 +399,7 @@ BINARY FORMAT
         fields, ptr = dXtemplateData(tpl, block)
         if datatype in templatesConvert:
             fields = eval(templatesConvert[datatype])
+
         return fields
 
     def dXtemplateData(tpl, block, ptr=0):
@@ -577,8 +584,46 @@ BINARY FORMAT
             childs.append(childname)
         return childs
 
+    def fixupTransformMatrix( matrix: Matrix ) -> Matrix:
+        '''
+            Converts from a D3DX matrix format to Blender's Matrix format.
+            Returns a transposed copy of the given matrix. If lefthanded, then inverts its Z-axis as well.
+        '''
+
+        # !!! DirectX stores translation in 4th row, not 4th column, so a transpose is needed.
+        m = matrix.transposed()
+
+        if lefthanded:
+            # Change from left-handed to right-handed.
+            zinv = Matrix()
+            zinv[2][2] = -1.0
+            m = zinv @ m @ zinv
+
+        return m
+
+    def fixupTranslation( vec: list ):
+        '''
+            If lefthanded, this inverts the Z-axis of the given translation.
+            Returns the given translation structure.
+        '''
+
+        if lefthanded:
+            vec[2] *= -1.0
+
+        return vec
+
+    def fixupUV( uv: list ):
+        '''
+            Inverts the V component.
+            Returns the given uv structure.
+        '''
+
+        uv[1] = 1.0 - uv[1]
+
+        return uv
+
     # the input nested list of [bonename, matrix, [child0,child1..]] is given by import_dXtree()
-    def buildArm(armdata, child, lvl=0, parent_matrix=False):
+    def buildArm( armdata: Union[ str, Armature ], child, lvl=0, parent_matrix: Matrix = None ) -> Union[ Armature, EditBone ]:
 
         bonename, bonemat, bonechilds = child
 
@@ -586,28 +631,45 @@ BINARY FORMAT
             armname = armdata
             armdata = bpy.data.armatures.new(name=armname)
             arm = bpy.data.objects.new(armname, armdata)
-            bpy.context.scene.objects.link(arm)
-            arm.select = True
-            bpy.context.scene.objects.active = arm
+
+            view_layer = bpy.context.view_layer
+            collection = view_layer.active_layer_collection.collection
+            collection.objects.link(arm)
+            arm.select_set( True )
+            view_layer.objects.active = arm
+
             bpy.ops.object.mode_set(mode='EDIT')
             parent_matrix = Matrix()
 
-        bone = armdata.edit_bones.new(name=bonename)
-        bonematW = parent_matrix * bonemat
+        bone: EditBone = armdata.edit_bones.new(name=bonename)
+        bonematW = parent_matrix @ bonemat
+
         bone.head = bonematW.to_translation()
+
         # bone.roll.. ?
+        # bone.head = parent_matrix.to_translation()
+        # bone.tail = bonematW.to_translation()
+
         bone_length = bone_maxlength
+        last_bone_head: Vector = None
         for bonechild in bonechilds:
-            bonechild = buildArm(armdata, bonechild, lvl + 1, bonematW)
+            bonechild = buildArm(armdata, bonechild, lvl=lvl + 1, parent_matrix=bonematW)
             bonechild.parent = bone
-            bone_length = min((bonechild.head - bone.head).length, bone_length)
-        bone.tail = bonematW * Vector((0, bone_length, 0))
+
+            last_bone_head = bonechild.head
+            bone_length = min((last_bone_head - bone.head).length, bone_length)
+
+        if len( bonechilds ) == 1:
+            bone.tail = Vector( last_bone_head )
+        else:
+            bone.tail = ( bonematW @ Matrix.Translation( (bone_length, 0, 0) ) ).to_translation()
+
         if lvl == 0:
             bpy.ops.object.mode_set(mode='OBJECT')
             return arm
         return bone
 
-    def import_dXtree(field, file, lvl=0):
+    def import_dXtree(field, file: str, lvl=0):
         tab = ' ' * lvl * 2
         if field == []:
             if show_geninfo: print('%s>> no childs, return False' % (tab))
@@ -641,7 +703,7 @@ BINARY FORMAT
                 else:
                     parentname = tokenname
 
-                ob = getMesh(parentname, tokenname)
+                ob = getMesh(parentname, tokenname, debug=show_geninfo)
                 ob.name = file
                 obs.append(ob)
 
@@ -650,23 +712,25 @@ BINARY FORMAT
             # frames contain one matrix (empty or bone)
             elif tokentype == 'frametransformmatrix':
                 [mat] = readToken(tokenname)
-                if show_geninfo: print('%smatrix : %s' % (tab, tokenname))
+
+                if show_geninfo: print('%smatrix : %s' % (tab, tokenname), mat)
 
             # frames can contain 0 or more frames
             elif tokentype == 'frame':
                 frames.append(tokenname)
                 if show_geninfo: print('%sframe : %s' % (tab, tokenname))
 
+        if mat: mat = fixupTransformMatrix( mat )
+
         # matrix is used for mesh transform if some mesh(es) exist(s)
         if ob:
             is_root = True
             if not mat:
-                mat = Matrix()
-                if show_geninfo: print(
-                    '%smesh token without matrix, set it to default\n%splease report in bug tracker if you read this !' % (
-                        tab, tab))
+                mat = fixupTransformMatrix( Matrix() )
+                operator.report( {'WARNING'}, 'No transform was defined in Frame %s, assuming identity transform.' % parentname )
+
             if parentname == '':
-                mat = mat * global_matrix
+                mat @= global_matrix
             if len(obs) == 1:
                 ob.matrix_world = mat
             else:
@@ -682,7 +746,7 @@ BINARY FORMAT
 
         # nothing case ?
         else:
-            ob = [parentname, Matrix() * global_matrix, []]
+            ob = [parentname, Matrix() @ global_matrix, []]
             if show_geninfo: print('%snothing here' % (tab))
 
         childs = []
@@ -691,7 +755,7 @@ BINARY FORMAT
             if show_geninfo: print('%s<Begin %s :' % (tab, tokenname))
 
             # child is either False, empty, object, or a list or undefined name matrices hierarchy
-            child = import_dXtree(getChilds(tokenname), lvl + 1)
+            child = import_dXtree(getChilds(tokenname), file, lvl=lvl + 1)
             if child and type(child) != list:
                 is_root = True
             childs.append([tokenname, child])
@@ -743,7 +807,7 @@ BINARY FORMAT
         return ob  # if ob else False
 
     # build from mesh token type
-    def getMesh(obname, tokenname, debug=False):
+    def getMesh(obname: str, tokenname: str, debug=False) -> bpy.types.Object:
 
         if debug: print('\nmesh name : %s' % tokenname)
 
@@ -759,10 +823,11 @@ BINARY FORMAT
 
         nVerts, verts, nFaces, faces = readToken(tokenname)
 
-        if debug:
-            print('verts    : %s %s\nfaces    : %s %s' % (nVerts, len(verts), nFaces, len(faces)))
+        for vec in verts:
+            fixupTranslation( vec )
+        
+        if debug: print('verts    : %s %s\nfaces    : %s %s' % (nVerts, len(verts), nFaces, len(faces)))
 
-        # for childname in token['childs'] :
         for childname in getChilds(tokenname):
 
             tokentype = tokens[childname]['type']
@@ -770,181 +835,105 @@ BINARY FORMAT
             # UV
             if tokentype == 'meshtexturecoords':
                 uv = readToken(childname)
-                # uv = bel.uv.asVertsLocation(uv, faces)
+
+                for _uv in uv: fixupUV( _uv )
+
                 uv = bel.uv.asFlatList(uv, faces)
+                
                 uvs.append(uv)
 
                 if debug: print('uv       : %s' % (len(uv)))
 
             # MATERIALS
             elif tokentype == 'meshmateriallist':
+
                 nbslots, facemats = readToken(childname)
 
                 if debug: print('facemats : %s' % (len(facemats)))
 
-                # length does not match (could be tuned more, need more cases)
-                if len(facemats) != len(faces):
-                    facemats = [facemats[0] for i in faces]
+                # Register the Materials mapped in this Mesh.
+                # Only Material children are allowed in a MeshMaterialList.
+                for slot_index, mat_token in enumerate(getChilds(childname)):
 
-                # mat can exist but with no datas so we prepare the mat slot
-                # with dummy ones
-                for slot in range(nbslots) if not do_not_add_unused_material else range(len(list(set(facemats)))):
-                    matslots.append('dXnoname%s' % slot)
+                    (face_color, alpha), power, specCol, emitCol = readToken( mat_token )
 
-                if debug: print(matslots)
+                    # Find texture file reference, if any.
+                    texture_ref = None
+                    normal_texture_path = None
+                    for texture_token in getChilds(mat_token):
+                        [_texture_ref] = readToken(texture_token)
+                        if _texture_ref and len(_texture_ref) > 0:
+                            texture_ref = _texture_ref
 
-                # Table of convert face material index to blender material slot
-                materials_slot_dictionary = {}
+                    if texture_ref is not None:
+                        # Search for normals file (that name of texture file with postfix "_normal")
+                        f = texture_ref.rsplit(".", 1)
+                        f.insert(-1, "_normal")
+                        norm_file = "".join(f[0:len(f) - 1])
+                        for ext in ["jpg", "jpeg", "png", "bmp"]:
+                            nrm = norm_file + "." + ext
+                            if os.path.exists(path + "/" + nrm):
+                                normal_texture_path = path + "/" + nrm
+                                break
 
-                # seek for materials then textures if any mapped in this mesh.
-                # no type test, only one option type in token meshmateriallist : 'Material'
-                for slot_index, mat_name in enumerate(getChilds(childname)):
+                    # Register the material.
+                    mat = bpy.data.materials.new( 'dXnoname' if texture_ref is None else texture_ref )
+                    mat.use_nodes = True
+                    mat_wrap = node_shader_utils.PrincipledBSDFWrapper(mat, is_readonly=False)
 
-                    if do_not_add_unused_material:
-                        if slot_index in facemats:
-                            materials_slot_dictionary.update({slot_index: len(materials_slot_dictionary)})
-                        else:
-                            # Omit unused material tokens
-                            if naming_method != 1:
-                                (_diffuse_color, _alpha), _power, _specCol, _emitCol = readToken(mat_name)
-                                for tex_name in getChilds(mat_name):
-                                    [_filename] = readToken(tex_name)
-                            continue
+                    mat.blend_method = 'BLEND' if alpha < 1.0 else 'OPAQUE'
+                    mat_wrap.base_color = face_color
+                    mat_wrap.alpha = alpha
+                    mat_wrap.specular = power
+                    mat.specular_color = specCol
 
-                    slot_id = slot_index if not do_not_add_unused_material else materials_slot_dictionary[slot_index]
-
-                    # rename dummy mats with the right name
-                    matslots[slot_id] = mat_name
-
-                    # blender material creation (need tuning)
-                    mat = bel.material.new(mat_name, naming_method)
-                    matslots[slot_id] = mat.name
-
-                    if naming_method != 1:
-                        # print('matname : %s'%matname)
-                        (diffuse_color, alpha), power, specCol, emitCol = readToken(mat_name)
-                        # if debug : print(diffuse_color,alpha, power, specCol, emitCol)
-                        mat.diffuse_color = diffuse_color
-                        mat.diffuse_intensity = power
-                        mat.specular_color = specCol
-                        # dX emit don't use diffuse color but is a color itself
-                        # convert it to a kind of intensity
-                        mat.emit = (emitCol[0] + emitCol[1] + emitCol[2]) / 3
-
-                        if alpha != 1.0:
-                            mat.use_transparency = True
-                            mat.transparency_method = 'Z_TRANSPARENCY'
-                            mat.alpha = alpha
-                            mat.specular_alpha = 0
-                            transp = True
-                        else:
-                            transp = False
-
-                        # texture
-                        # only 'TextureFilename' can be here, no type test
-                        # textures have no name in .x so we build
-                        # image and texture names from the image file name
-                        # bdata texture slot name = bdata image name
-                        btexnames = []
-                        first_texture_name = ""
-                        for tex_name in getChilds(mat_name):
-                            [filename] = readToken(tex_name)
-                            TEXTURE = 0
-                            NORMALS = 1
-                            for tex_norm in [TEXTURE, NORMALS]:
-                                if tex_norm == NORMALS:
-                                    # search to normals file (that name of texture file with postfix "_normal")
-                                    f = filename.rsplit(".", 1)
-                                    f.insert(-1, "_normal")
-                                    norm_file = "".join(f[0:len(f) - 1])
-                                    exist_flag = False
-                                    for ext in ["jpg", "jpeg", "png", "bmp"]:
-                                        nrm = norm_file + "." + ext
-                                        if os.path.exists(path + "/" + nrm):
-                                            filename = nrm
-                                            exist_flag = True
-                                            break
-                                    if exist_flag is False:
-                                        break
-
-                                # create/rename/reuse etc corresponding data image
-                                # (returns False if not found)
-                                if show_geninfo: print(path + "/" + filename)
-                                img = bel.image.new(path + '/' + filename)
-
-                                if not img:
-                                    img_name = 'not_found'
-                                else:
-                                    img_name = img.name
-
-                                if first_texture_name == "":
-                                    first_texture_name = img_name
-
-                                # print('texname : %s'%texname)
-                                # print('filename : %s'%filename)
-                                # print('btex/img name : %s'%imgname)
-
-                                # associated texture (no naming check.. maybe tune more)
-                                # tex and texslot are created even if img not found
-                                if img_name in bpy.data.textures and (
-                                        img == False or bpy.data.textures[img_name].image == img):
-                                    tex = bpy.data.textures[img_name]
-                                else:
-                                    tex = bpy.data.textures.new(name=img_name, type='IMAGE')
-                                    if img: tex.image = img
-
-                                tex.use_alpha = transp
-                                tex.use_preview_alpha = transp
-
-                                # then create texture slot
-                                tex_slot = mat.texture_slots.create(index=tex_norm)
-                                tex_slot.texture = tex
-                                tex_slot.texture_coords = 'UV'
-                                tex_slot.uv_layer = 'UV0'
-                                tex_slot.use_map_alpha = transp
-                                tex_slot.alpha_factor = alpha
-                                if tex_norm == NORMALS:
-                                    tex_slot.use_map_color_diffuse = False
-                                    tex_slot.use_map_normal = True
-                                    tex_slot.normal_factor = 1.0
-                                    tex_slot.bump_method = "BUMP_BEST_QUALITY"
-
-                        # mat.name = first_texture_name
-                        # first_texture_name = ""
-
-                facemats = [materials_slot_dictionary[i] for i in facemats]
-
-                # create remaining dummy mat
-                if debug: print(matslots)
-                for slot_index, mat_name in enumerate(matslots):
-                    if mat_name not in bpy.data.materials:
-                        mat = bel.material.new(mat_name, naming_method)
-                        #slot_id = slot_index if not do_not_add_unused_material else materials_slot_dictionary[
-                        #    slot_index]
-                        matslots[slot_index] = mat.name
-
+                    # Load the base texture of the Material, if it exists.
+                    if texture_ref is not None:
+                        texture_path = path + "/" + texture_ref
+                        img = bpy.data.images.load( texture_path, check_existing=True ) if os.path.exists( texture_path ) else None
+                        if img is not None:
+                            mat_wrap.base_color_texture.image = img
+                        
+                    # Load the normal map texture of the Material, if it exists.
+                    if normal_texture_path is not None:
+                        img = bpy.data.images.load( normal_texture_path, check_existing=True ) if os.path.exists( normal_texture_path ) else None
+                        if img is not None:
+                            mat_wrap.normalmap_texture.image = img
+                    
+                    matslots.append( mat.name ) # use name property to ensure correct name in Blender
+                    
                 if debug: print('matslots : %s' % matslots)
 
             # VERTICES GROUPS/WEIGHTS
             elif tokentype == 'skinweights':
                 groupname, nverts, vindices, vweights, mat = readToken(childname)
-                groupname = namelookup[groupname]
-                if debug:
-                    print('vgroup    : %s (%s/%s verts) %s' % (
-                        groupname, len(vindices), len(vweights), 'bone' if groupname in tokens else ''))
 
-                # if debug : print('matrix : %s\n%s'%(type(mat),mat))
+                mat = fixupTransformMatrix( mat )
 
-                groupnames.append(groupname)
-                groupindices.append(vindices)
-                groupweights.append(vweights)
+                if groupname in namelookup:
+                    groupname = namelookup[groupname]
+                    if debug:
+                        print('vgroup    : %s (%s/%s verts) %s' % (
+                            groupname, len(vindices), len(vweights), 'bone' if groupname in tokens else ''))
+
+                    # if debug : print('matrix : %s\n%s'%(type(mat),mat))
+
+                    groupnames.append(groupname)
+                    groupindices.append(vindices)
+                    groupweights.append(vweights)
+
+                else:
+                    operator.report( {'WARNING'}, 'Encountered undefined vertex group %s! Skipping.' % groupname )
 
         ob = bel.mesh.write(obname, tokenname,
-                            verts, edges, faces,
-                            matslots, facemats, uvs,
-                            groupnames, groupindices, groupweights,
-                            use_smooth_groups,
-                            naming_method)
+            verts, edges, faces,
+            matslots, facemats, uvs,
+            groupnames, groupindices, groupweights,
+            use_smooth_groups,
+            naming_method)
+
+        # Fixup the Mesh's normals.
+        ob.data.flip_normals()
 
         return ob
 
@@ -963,7 +952,7 @@ BINARY FORMAT
             header = dXheader(data)
 
             if global_matrix is None:
-                global_matrix = mathutils.Matrix()
+                global_matrix = Matrix()
 
             if header:
                 minor, major, format, accuracy = header
@@ -982,7 +971,7 @@ BINARY FORMAT
                     t = time.clock()
                     tokens, templates, tokentypes = dXtree(data, quickmode)
                     readstruct_time = time.clock() - t
-                    if show_geninfo: print('builded tree in %.2f\'' % (readstruct_time))  # ,end='\r')
+                    if show_geninfo: print('built tree in %.2f\'' % (readstruct_time))  # ,end='\r')
 
                     ## populate templates with datas
                     for tplname in templates:
@@ -1016,7 +1005,7 @@ BINARY FORMAT
                             else:
                                 obname = tokenname
 
-                            ob = getMesh(obname, tokenname, show_geninfo)
+                            ob = getMesh(obname, tokenname, debug=show_geninfo)
                             ob.matrix_world = global_matrix
 
                     print('done in %.2f\'' % (time.clock() - start))  # ,end='\r')

@@ -1,7 +1,6 @@
 import bpy
-from bpy.types import Mesh, PointLamp, SpotLamp, HemiLamp, AreaLamp, SunLamp, Camera, TextCurve, MetaBall, Lattice, \
-    Armature
 
+from bpy.types import Mesh, PointLight, SpotLight, AreaLight, SunLight, Camera, Curve, TextCurve, MetaBall, Lattice, Armature
 
 def new(name, datatype, naming_method):
     if name in bpy.data.objects and naming_method:
@@ -19,8 +18,12 @@ def new(name, datatype, naming_method):
             ob = bpy.data.objects.new(name, datatype)
     else:
         ob = bpy.data.objects.new(name, datatype)
-    if ob.name not in bpy.context.scene.objects.keys():
-        bpy.context.scene.objects.link(ob)
+
+    collection = bpy.context.view_layer.active_layer_collection.collection
+
+    if ob.name not in collection.objects.keys():
+        collection.objects.link(ob)
+
     return ob
 
 
@@ -95,8 +98,8 @@ def removeData(data):
         if data_type == Mesh:
             bpy.data.meshes.remove(data)
         # lamp
-        elif data_type in [PointLamp, SpotLamp, HemiLamp, AreaLamp, SunLamp]:
-            bpy.data.lamps.remove(data)
+        elif data_type in [PointLight, SpotLight, AreaLight, SunLight]:
+            bpy.data.lights.remove(data)
         # camera
         elif data_type == Camera:
             bpy.data.cameras.remove(data)

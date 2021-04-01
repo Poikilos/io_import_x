@@ -5,8 +5,8 @@ bl_info = {
     "name": "DirectX Importer",
     "description": "Import DirectX Model Format (.x)",
     "author": "Littleneo (Jerome Mahieux), limemidolin, poikilos",
-    "version": (2, 7),
-    "blender": (2, 66, 0),
+    "version": (2, 8),
+    "blender": (2, 80, 0),
     "location": "File > Import > DirectX (.x)",
     "warning": "Upstream littleneo version does NOT work with >=2.66",
     "wiki_url": "https://github.com/littleneo/directX_blender/wiki",
@@ -54,54 +54,53 @@ import bel.material
 import bel.ob
 import bel.fs
 
-
-class ImportX(bpy.types.Operator, ImportHelper):
+class IMPORT_OT_X(bpy.types.Operator, ImportHelper):
     '''Load a Direct x File'''
     bl_idname = "import_scene.x"
     bl_label = "Import X"
     bl_options = {'PRESET', 'UNDO'}
 
-    files = CollectionProperty(type=bpy.types.PropertyGroup)
+    files : CollectionProperty(type=bpy.types.PropertyGroup)
 
     filename_ext = ".x"
-    filter_glob = StringProperty(
+    filter_glob : StringProperty(
         default="*.x",
         options={'HIDDEN'},
     )
-    show_tree = BoolProperty(
+    show_tree : BoolProperty(
         name="Show x tokens tree",
         description="display relationships between x items in the console",
         default=False,
     )
-    show_templates = BoolProperty(
+    show_templates : BoolProperty(
         name="Show x templates",
         description="display templates defined in the .x file",
         default=False,
     )
-    show_geninfo = BoolProperty(
+    show_geninfo : BoolProperty(
         name="Show processing",
         description="display details for each imported thing",
         default=False,
     )
-    do_not_add_unused_material = BoolProperty(
+    do_not_add_unused_material : BoolProperty(
         name="Don't add unused materials",
         description="Do not add unused materials.",
         default=False,
     )
 
-    quickmode = BoolProperty(
+    quickmode : BoolProperty(
         name="Quick mode",
         description="only retrieve mesh basics",
         default=False,
     )
 
-    parented = BoolProperty(
+    parented : BoolProperty(
         name="Object Relationships",
         description="import armatures, empties, rebuild parent-childs relations",
         default=True,
     )
 
-    bone_maxlength = FloatProperty(
+    bone_maxlength : FloatProperty(
         name="Bone length",
         description="Bones max length",
         min=0.1, max=10.0,
@@ -109,7 +108,7 @@ class ImportX(bpy.types.Operator, ImportHelper):
         default=1.0,
     )
 
-    chunksize = EnumProperty(
+    chunksize : EnumProperty(
         name="Chunksize",
         items=(('0', "all", ""),
                ('4096', "4KB", ""),
@@ -119,7 +118,7 @@ class ImportX(bpy.types.Operator, ImportHelper):
         default='2048',
         description="number of bytes red in a row",
     )
-    naming_method = EnumProperty(
+    naming_method : EnumProperty(
         name="Naming method",
         items=(('0', "increment name if exists", "blender default"),
                ('1', "use existing", "this only append new elements"),
@@ -129,54 +128,54 @@ class ImportX(bpy.types.Operator, ImportHelper):
         default='0',
         description="behaviour when a name already exists in Blender Data",
     )
-    use_ngons = BoolProperty(
+    use_ngons : BoolProperty(
         name="NGons",
         description="Import faces with more than 4 verts as fgons",
         default=True,
     )
-    use_edges = BoolProperty(
+    use_edges : BoolProperty(
         name="Lines",
         description="Import lines and faces with 2 verts as edge",
         default=True,
     )
-    use_smooth_groups = BoolProperty(
+    use_smooth_groups : BoolProperty(
         name="Smooth Groups",
         description="Surround smooth groups by sharp edges",
         default=True,
     )
 
-    use_split_objects = BoolProperty(
+    use_split_objects : BoolProperty(
         name="Object",
         description="Import OBJ Objects into Blender Objects",
         default=True,
     )
-    use_split_groups = BoolProperty(
+    use_split_groups : BoolProperty(
         name="Group",
         description="Import OBJ Groups into Blender Objects",
         default=True,
     )
 
-    use_groups_as_vgroups = BoolProperty(
+    use_groups_as_vgroups : BoolProperty(
         name="Poly Groups",
         description="Import OBJ groups as vertex groups",
         default=False,
     )
 
-    use_image_search = BoolProperty(
+    use_image_search : BoolProperty(
         name="Image Search",
         description="Search subdirs for any assosiated images " \
                     "(Warning, may be slow)",
         default=True,
     )
 
-    split_mode = EnumProperty(
+    split_mode : EnumProperty(
         name="Split",
         items=(('ON', "Split", "Split geometry, omits unused verts"),
                ('OFF', "Keep Vert Order", "Keep vertex order from file"),
                ),
     )
 
-    global_clamp_size = FloatProperty(
+    global_clamp_size : FloatProperty(
         name="Clamp Scale",
         description="Clamp the size to this maximum (Zero to Disable)",
         min=0.0, max=1000.0,
@@ -184,7 +183,7 @@ class ImportX(bpy.types.Operator, ImportHelper):
         default=0.0,
     )
 
-    axis_forward = EnumProperty(
+    axis_forward : EnumProperty(
         name="Forward",
         items=(('X', "Left (x)", ""),
                ('Y', "Same (y)", ""),
@@ -196,7 +195,7 @@ class ImportX(bpy.types.Operator, ImportHelper):
         default='-Z',
     )
 
-    axis_up = EnumProperty(
+    axis_up : EnumProperty(
         name="Up",
         items=(('X', "Right (x)", ""),
                ('Y', "Back (y)", ""),
@@ -206,6 +205,12 @@ class ImportX(bpy.types.Operator, ImportHelper):
                ('-Z', "Bottom (-z)", ""),
                ),
         default='Y',
+    )
+
+    lefthanded : BoolProperty(
+        name="Left-handed",
+        description="Set this if the imported model needs to be converted from a left-handed coordinate system",
+        default=True
     )
 
     def execute(self, context):
@@ -242,7 +247,8 @@ class ImportX(bpy.types.Operator, ImportHelper):
         # import box
         box = layout.box()
         col = box.column(align=True)
-        col.label('Import Options :')
+        col.label(text='Import Options :')
+        col.prop(self, "lefthanded")
         col.prop(self, "chunksize")
         col.prop(self, "use_smooth_groups")
         actif = not (self.quickmode)
@@ -258,25 +264,25 @@ class ImportX(bpy.types.Operator, ImportHelper):
         # source orientation box
         box = layout.box()
         col = box.column(align=True)
-        col.label('Source Orientation :')
+        col.label(text='Source Orientation :')
         col.prop(self, "axis_forward")
         col.prop(self, "axis_up")
 
         box = layout.box()
         col = box.column(align=True)
-        col.label("Option 1")
+        col.label(text="Option 1")
         col.prop(self, "do_not_add_unused_material")
 
         # naming methods box
         box = layout.box()
         col = box.column(align=True)
-        col.label('Naming Method :')
+        col.label(text='Naming Method :')
         col.props_enum(self, "naming_method")
 
         # info/debug box
         box = layout.box()
         col = box.column(align=True)
-        col.label('Info / Debug :')
+        col.label(text='Info / Debug :')
         col.prop(self, "show_tree")
         col.prop(self, "show_templates")
         col.prop(self, "show_geninfo")
@@ -304,26 +310,32 @@ class ImportX(bpy.types.Operator, ImportHelper):
         layout.prop(self, "use_image_search")
         '''
 
-
 def menu_func_import(self, context):
-    self.layout.operator(ImportX.bl_idname, text="DirectX (.x)")
-
+    self.layout.operator(IMPORT_OT_X.bl_idname, text="DirectX (.x)")
 
 # def menu_func_export(self, context):
 #    self.layout.operator(ExportX.bl_idname, text="DirectX (.x)")
 
-def register():
-    bpy.utils.register_module(__name__)
+classes = [
+    IMPORT_OT_X
+] 
 
-    bpy.types.INFO_MT_file_import.append(menu_func_import)
-    # bpy.types.INFO_MT_file_export.append(menu_func_export)
+def register():
+    from bpy.utils import register_class
+    for cls in classes:
+        register_class(cls)
+
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
+    # bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
 
 
 def unregister():
-    bpy.utils.unregister_module(__name__)
+    from bpy.utils import unregister_class
+    for cls in reversed(classes):
+        unregister_class(cls)
 
-    bpy.types.INFO_MT_file_import.remove(menu_func_import)
-    # bpy.types.INFO_MT_file_export.remove(menu_func_export)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
+    # bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
 
 
 if __name__ == "__main__":

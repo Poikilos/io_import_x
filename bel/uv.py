@@ -2,6 +2,8 @@ from mathutils import Vector
 from .__init__ import *
 from time import clock
 
+from bpy.types import Mesh
+
 
 # uvs :
 #
@@ -38,7 +40,7 @@ def write(me, uvs, matimage=False):
 
 
 ## WAY faster
-def flatwrite(me, uvs, matimage=False):
+def flatwrite(me: Mesh, uvs, matimage=False):
     # t = clock()
     newuvs = []
     # print('uv funcinput : %s'%(len(uvs)))
@@ -46,8 +48,7 @@ def flatwrite(me, uvs, matimage=False):
     for uvi, uvlist in enumerate(uvs):
         # print('uvlist input : %s'%(len(uvlist)))
         # print(uvlist[0:5])
-        uv = me.uv_textures.new()
-        uv.name = 'UV%s' % uvi
+        uv = me.uv_layers.new(name='UV%s' % uvi)
         uvlayer = me.uv_layers[-1].data
         # flatuv = awaited uvlist length
         # flatuv = list( range(len(uvlayer) * 2) )

@@ -1,6 +1,7 @@
 ##\file
 # raw extract quick cleaning from blended cities2.6 project. thanks to myself for cooperation, but what a messy code we have here.
 import bpy
+import bpy.types
 import mathutils
 from mathutils import *
 import bmesh
@@ -53,13 +54,13 @@ def new(name, naming_method=0):
 
 ## material listed in matslots must exist before creation of material slots
 
-def write(obname, name,
+def write(obname: str, name: str,
           verts=[], edges=[], faces=[],
           matslots=[], mats=[], uvs=[],
           groupnames=[], vindices=[], vweights=[],
           smooth=False,
           naming_method=0,
-          ):
+          ) -> bpy.types.Object:
     obj = bpy.data.objects[obname] if obname in bpy.data.objects else False
     me = bpy.data.meshes[name] if name in bpy.data.meshes else False
 
@@ -78,7 +79,7 @@ def write(obname, name,
             # print('remove me %s'%me.name)
             bob.removeData(me)
 
-    me = bpy.data.meshes.new(name)
+    me: bpy.types.Mesh = bpy.data.meshes.new(name)
     if naming_method == 2: me.name = name
 
     me.from_pydata(verts, edges, faces)
@@ -98,8 +99,10 @@ def write(obname, name,
                 warn.append('Created missing material : %s'%matname)
             else :
             '''
-            mat = bpy.data.materials[matname]
+            mat = bpy.data.materials[ matname ] 
             me.materials.append(mat)
+
+            '''
             texslot_nb = len(mat.texture_slots)
             if texslot_nb:
                 texslot = mat.texture_slots[0]
@@ -111,6 +114,7 @@ def write(obname, name,
                             matimage.append(img)
                             continue
             matimage.append(False)
+            '''
 
     # uvs
     if len(uvs) > 0:
@@ -120,6 +124,7 @@ def write(obname, name,
     # map a material to each face
     if len(mats) > 0:
         for fi, f in enumerate(me.polygons):
+            if fi < 0 or fi >= len(mats): continue
             f.material_index = mats[fi]
 
     obj = bpy.data.objects.new(name=obname, object_data=me)
@@ -142,8 +147,12 @@ def write(obname, name,
             weightsadd(obj, groupname, vindices[gpi], vweights[gpi])
 
     # scene link check
-    if obj.name not in bpy.context.scene.objects.keys():
-        bpy.context.scene.objects.link(obj)
+    
+    view_layer = bpy.context.view_layer
+    collection = view_layer.active_layer_collection.collection
+
+    if obj.name not in collection.objects.keys():
+        collection.objects.link(obj)
 
     return obj
 
@@ -171,7 +180,7 @@ def weightsadd(ob, groupname, vindices, vweights=False):
         vweights = [1.0 for i in range(len(vindices))]
     elif type(vweights) == float:
         vweights = [vweights for i in range(len(vindices))]
-    group = ob.vertex_groups.new(groupname)
+    group = ob.vertex_groups.new(name=groupname)
     for vi, v in enumerate(vindices):
         group.add([v], vweights[vi], 'REPLACE')
 
