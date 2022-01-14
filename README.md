@@ -25,7 +25,7 @@ Bones or models may not be reoriented from y-up to z-up and other similar issues
 
 ### Animation Code
 (Not started yet)
-The bones would have to be imported correctly (see "Orientation") first. Then, pose frames would have to be added to the bones (accounting for whether bones have parents which would make animations relative). Importing a keyframe on every frame may be the only way (but that's fine--users can always remove some keyframes manually to make improving the animation easier).
+The bones would have to be imported correctly (see "Orientation") first. However, the orientation of the model will probably have to be kept the same as the x-file initially (until after writing the animation frames) to avoid very big complications. Then, pose frames would have to be added to the bones (accounting for whether bones have parents which would make animations relative). Importing a keyframe on every frame may be the only way (but that's fine--users can always remove some keyframes manually to make improving the animation easier).
 
 
 ## License
