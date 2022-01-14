@@ -1,6 +1,6 @@
 # io_import_x
 (based on directX_blender by littleneo)
-A DirectX importer addon for Blender 2.7
+Import .x files into Blender. The **Poikilos fork** attempts to maintain compatibility with the latest stable Blender and allows install via GUI (See "Install" in readme).
 
 ## Primary Goals
 
@@ -8,7 +8,13 @@ A DirectX importer addon for Blender 2.7
   (obviously verts and faces but also uv, armatures, weights, normals).
 * Import .x in binary format [not yet implemented]
 
+Known Issues:
+Tasks left undone are complex, so pull requests will probably be the only way to resolve them.
+- Bones or models may not be reoriented from y-up to z-up and other similar issues such as bones rotated incorrectly may occur where the x file differs from Blender geometry. Since one file may differ from another, how to deal with this consistently is unknown.
+- Animations aren't imported. The bones would have to be imported correctly (see issue above) first. Then, pose frames would have to be added to the bones (accounting for whether bones have parents which would make animations relative). Importing a keyframe on every frame may be the only way (but good enough--you can always remove some manually to improve the animation).
+
 -littleneo and Poikilos
+
 
 ## License
 This project is distributed under the GNU General Public License v3 (see
@@ -20,7 +26,9 @@ as required by Blender Foundation for all add-ons. Any public licensed
 code cannot later be limited to a more restrictive license, so adding a
 GPLv3 license to this repo is ok.
 
-## Setup
+
+## Install
+- Above (on the [io_import_x page GitHub](https://github.com/poikilos/io_import_x)), click "Code", "Download ZIP."
 1. Start Blender
 2. Download & *Save* zip from GitHub. If you click open you may not be
    able to find the zip later _(you must use the poikilos fork or
@@ -30,17 +38,21 @@ GPLv3 license to this repo is ok.
    %APPDATA%/Blender Foundation/blender/2.79/scripts/addons)_ on Windows
    and skip to step 3)
    * Click "File," "User Preferences," "Add-ons"
-   * Click "Install add-on from file..."
+   * Click "Install..." (In earlier Blender versions, "Install add-on from file...")
    * Choose the downloaded io_import_x-master.zip (usually in your
      "Downloads" directory)
 3. Enable the add-on in the "Add-ons" tab of "User Preferences".
-4. Click "Save User Preferences" to keep the add-on enabled for other
-   scenes.
+4. The preference to enable the add-on saves automatically by default
+   unless using an older version of Blender. If auto-save preferences is
+   not enabled, click "Save User Preferences" to keep the add-on
+   enabled for other scenes.
 
 -Poikilos
 
+
 ## Usage
 * File > Import > DirectX
+
 
 ## Planned Features
 * Export to .x or mod/co-maintain the existing x exporter.
@@ -56,8 +68,10 @@ GPLv3 license to this repo is ok.
 -littleneo and Poikilos
 [See also TODO below]
 
+
 ## Changes
 see CHANGELOG.md
+
 
 ## Developer Notes
 * I don't want to load the whole file into memory as it can be huge, so
@@ -88,7 +102,6 @@ see CHANGELOG.md
     be independent of the container type.
 
 -littleneo and Poikilos
-
 
 ### File Format Parsing
 
@@ -154,15 +167,18 @@ compute pointer value.
     '{' and '<something>' and '}' on the same line or '{' '}' are always unique ?
 -littleneo
 
+
 ## Credits
 * TEST FILES:
   <http://assimp.svn.sourceforge.net/viewvc/assimp/trunk/test/models/X/>
+
 
 ## References
 * <http://paulbourke.net/dataformats/directx/>
 * <http://www.informikon.com/various/the-simplest-skeletal-animation-possible.html>
 * <http://msdn.microsoft.com/en-us/library/windows/desktop/bb173011%28v=VS.85%29.aspx>
 * <http://www.toymaker.info/Games/index.html>
+
 
 ## Discussions
 * <https://blender.community/c/rightclickselect/kYcbbc/>
@@ -171,6 +187,7 @@ compute pointer value.
 * <https://blender.stackexchange.com/questions/107834/blender-2-79a-x-files>
 * <https://github.com/littleneo/directX_blender/issues/6>
 * <https://github.com/limemidolin/directX_blender/pull/1/commits>
+
 
 ## See also
 * A fault-tolerant x loader in Irrlicht:
