@@ -209,7 +209,7 @@ class ImportX(bpy.types.Operator, ImportHelper):
     )
 
     def execute(self, context):
-        from . import import_x
+        import import_x
         if self.split_mode == 'OFF':
             self.use_split_objects = False
             self.use_split_groups = False
@@ -229,7 +229,7 @@ class ImportX(bpy.types.Operator, ImportHelper):
                                         ).to_4x4()
         keywords["global_matrix"] = global_matrix
 
-        bel.fs.saveOptions(self, 'import_scene.x', self.as_keywords(ignore=(
+        bel.fs.saveOptions(self.bl_idname, self.as_keywords(ignore=(
             "filter_glob",
             "filepath",
             "files"

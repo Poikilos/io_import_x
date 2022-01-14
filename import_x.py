@@ -27,7 +27,7 @@ import bel.material
 import bel.ob
 import bel.fs
 
-from .templates_x import *
+from templates_x import *
 
 '''
 # just a temp hack to reload bel everytime
@@ -311,7 +311,7 @@ BINARY FORMAT
             chunk = data.read()
         else:
             chunk = data.read(chunksize)
-        if format == 'txt':
+        if _format == 'txt':
             lines = chunk.decode('utf-8', errors='ignore')
             # if stream : return lines.replace('\r','').replace('\n','')
             lines = lines.replace('\r', '\n').split('\n')
@@ -340,7 +340,7 @@ BINARY FORMAT
         name = xnam
         if len(name) == 0: name = l.split(' ')[0].strip()
 
-        namelookup[xnam] = bel.bpyname(name, tokens, 4)
+        namelookup[xnam] = bel.bpyname(name, tokens, suffix=4)
 
         return namelookup[xnam]
 
@@ -632,10 +632,12 @@ BINARY FORMAT
             bonechild = buildArm(armdata, bonechild, lvl + 1, bonematW)
             bonechild.parent = bone
             bone_length = min((bonechild.head - bone.head).length, bone_length)
+        
         if bpy.app.version >= (2, 80, 0):
-            bone.tail = bonematW @ Vector((0, bone_length, 0))
+            bone.tail = bonematW @ Vector((bone_length, 0, 0))
         else:
-            bone.tail = bonematW * Vector((0, bone_length, 0))
+            bone.tail = bonematW * Vector((bone_length, 0, 0))
+        
         if lvl == 0:
             bpy.ops.object.mode_set(mode='OBJECT')
             return arm
@@ -691,6 +693,8 @@ BINARY FORMAT
                 frames.append(tokenname)
                 if show_geninfo: print('%sframe : %s' % (tab, tokenname))
 
+        if (mat): mat = mat.transposed()
+
         # matrix is used for mesh transform if some mesh(es) exist(s)
         if ob:
             is_root = True
@@ -700,7 +704,7 @@ BINARY FORMAT
                     '%smesh token without matrix, set it to default\n%splease report in bug tracker if you read this !' % (
                         tab, tab))
             if parentname == '':
-                mat = mat * global_matrix
+                mat @= global_matrix
             if len(obs) == 1:
                 ob.matrix_world = mat
             else:
@@ -1057,16 +1061,16 @@ BINARY FORMAT
                 global_matrix = mathutils.Matrix()
 
             if header:
-                minor, major, format, accuracy = header
+                minor, major, _format, accuracy = header
 
                 if show_geninfo:
                     print('\n%s directX header' % item_file.name)
                     print('  minor  : %s' % (minor))
                     print('  major  : %s' % (major))
-                    print('  format : %s' % (format))
+                    print('  format : %s' % (_format))
                     print('  floats are %s bits' % (accuracy))
 
-                if format in ['txt']:  # , 'bin' ] :
+                if _format in ['txt']:  # , 'bin' ] :
 
                     ## FILE READ : STEP 1 : STRUCTURE
                     if show_geninfo: print('\nBuilding internal .x tree')
