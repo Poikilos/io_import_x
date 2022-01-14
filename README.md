@@ -9,11 +9,23 @@ Import .x files into Blender. The **Poikilos fork** attempts to maintain compati
 * Import .x in binary format [not yet implemented]
 
 Known Issues:
-Tasks left undone are complex, so pull requests will probably be the only way to resolve them.
-- Bones or models may not be reoriented from y-up to z-up and other similar issues such as bones rotated incorrectly may occur where the x file differs from Blender geometry. Since one file may differ from another, how to deal with this consistently is unknown.
-- Animations aren't imported. The bones would have to be imported correctly (see issue above) first. Then, pose frames would have to be added to the bones (accounting for whether bones have parents which would make animations relative). Importing a keyframe on every frame may be the only way (but good enough--you can always remove some manually to improve the animation).
+- Models and bones may differ in orientation from the x file (See "Contributing")
+- Animations aren't imported (See "Contributing").
 
 -littleneo and Poikilos
+
+
+## Contributing
+Contributors have kept this fork going as seen in the commit history. :+1:
+
+The best way to help this project is to contribute code. Tasks left undone (in subsections below) are complex, so pull requests will probably be the only way they will get resolved.
+
+### Orientation
+Bones or models may not be reoriented from y-up to z-up and other similar issues such as bones rotated incorrectly may occur where the x file differs from Blender geometry. Since one file may differ from another, how to deal with this consistently is unknown. Someone who figures out how will likely be the one to write the code and fix it.
+
+### Animation Code
+(Not started yet)
+The bones would have to be imported correctly (see "Orientation") first. Then, pose frames would have to be added to the bones (accounting for whether bones have parents which would make animations relative). Importing a keyframe on every frame may be the only way (but that's fine--users can always remove some keyframes manually to make improving the animation easier).
 
 
 ## License
