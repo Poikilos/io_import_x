@@ -460,7 +460,7 @@ BINARY FORMAT
             return field, e + 1
         elif datatype == 'float':
             e = block.index(eof, s + 1)
-            return float(block[s:e]), e + 1
+            return float(block[s:e].replace(';', '')), e + 1
         elif datatype == 'string':
             e = block.index(eof, s + 1)
             return str(block[s + 1:e - 1]), e + 1
