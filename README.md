@@ -20,6 +20,9 @@ Contributors have kept this fork going as seen in the commit history. :+1:
 
 The best way to help this project is to contribute code. Tasks left undone (in subsections below) are complex, so pull requests will probably be the only way they will get resolved.
 
+See also:
+- Blender API [Best Practice](https://docs.blender.org/api/current/info_best_practice.html)
+
 ### Orientation
 Bones or models may not be reoriented from y-up to z-up and other similar issues such as bones rotated incorrectly may occur where the x file differs from Blender geometry. Since one file may differ from another, how to deal with this consistently is unknown. Someone who figures out how will likely be the one to write the code and fix it.
 
