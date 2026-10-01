@@ -415,11 +415,12 @@ BINARY FORMAT
         # return dXtemplateData(tpl,block)
         fields, _ = dXtemplateData(tpl, block)
         if datatype in templatesConvert:
-            fields = eval(templatesConvert[datatype])
+            fields = eval(templatesConvert[datatype], {}, {'fields': fields, 'Matrix': Matrix})
         return fields
 
     def dXtemplateData(tpl, block, ptr=0):
         # print('dxTPL',block[ptr])
+        vars_ = {}
         pack = []
         for member in tpl['members']:
             # print(member)
@@ -430,7 +431,7 @@ BINARY FORMAT
                 s = dataname.index('[') + 1
                 e = dataname.index(']')
                 # print(dataname[s:e])
-                length = eval(dataname[s:e])
+                length = eval(dataname[s:e], {}, vars_)
                 # print("array %s type %s length defined by '%s' : %s"%(dataname[:s-1],datatype,dataname[s:e],length))
                 dataname = dataname[:s - 1]
                 datavalue, ptr = dXarray(block, datatype, length, ptr)
@@ -442,7 +443,7 @@ BINARY FORMAT
             # if len(str(datavalue)) > 50 : dispvalue = str(datavalue[0:25]) + ' [...] ' + str(datavalue[-25:])
             # else : dispvalue = str(datavalue)
             # print('%s :  %s %s'%(dataname,dispvalue,type(datavalue)))
-            exec('%s = datavalue' % (dataname))
+            vars_[dataname] = datavalue
             pack.append(datavalue)
         return pack, ptr + 1
 
@@ -475,7 +476,7 @@ BINARY FORMAT
             # print('> use template %s'%datatype)
             fields, ptr = dXtemplateData(tpl, block, s)
             if datatype in templatesConvert:
-                fields = eval(templatesConvert[datatype])
+                fields = eval(templatesConvert[datatype], {}, {'fields': fields, 'Matrix': Matrix})
             return fields, ptr
 
     def dXarray(block, datatype, length, s=0):
@@ -979,7 +980,14 @@ BINARY FORMAT
                                     tex_slot.image = tex.image
                                     tex_slot.name = img_name
                                     tex_slot.location = (-500.0,300.0)
-                                    mat_shadernode = mat.node_tree.nodes.get("Principled BSDF")
+                                    mat_shadernode = None
+                                    for _node in mat.node_tree.nodes:
+                                        if _node.type == 'BSDF_PRINCIPLED':
+                                            mat_shadernode = _node
+                                            break
+                                    if mat_shadernode is None:
+                                        print("WARNING: no Principled BSDF node found in material %s" % mat.name)
+                                        continue
                                     mat_input = mat_shadernode.inputs[0]
                                     tex_output = tex_slot.outputs[0]
                                     mat.node_tree.links.new(input = mat_input, output = tex_output)
